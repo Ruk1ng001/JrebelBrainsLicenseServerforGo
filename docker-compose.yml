@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  license-server:
+    image: ruking001/jrebel-license-server:latest
+    container_name: license-server
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - HOST=0.0.0.0
+      - SERVER_VERSION=3.2.4
+      - SERVER_GUID=4794f7bd-a9df-4017-a176-44913bcbaf77
+      - PROTOCOL_VERSION=1.1
+      - SERVER_RANDOMNESS=H2ulzLlh7E0=
+    # 如果需要使用自定义私钥，取消下面的注释
+    # volumes:
+    #   - ./private.key:/app/private.key:ro
+    # environment:
+    #   - PRIVATE_KEY_PATH=/app/private.key
+    networks:
+      - license-network
+
+networks:
+  license-network:
+    driver: bridge

@@ -1,0 +1,31 @@
+# 二进制文件
+license-server
+*.exe
+*.test
+*.out
+
+# 日志
+*.log
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+/.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 测试覆盖率
+coverage.out
+coverage.html
+
+# 私钥文件
+*.key
+*.pem
