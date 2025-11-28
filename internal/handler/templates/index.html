@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JRebel License Server</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .section {
+            margin: 30px 0;
+        }
+
+        .section-title {
+            color: #667eea;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        .info-box strong {
+            color: #667eea;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .code-box {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .code-box pre {
+            margin: 0;
+            white-space: pre;
+        }
+
+        .copy-code-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .copy-code-btn:hover {
+            background: #555;
+        }
+
+        .steps {
+            counter-reset: step;
+            list-style: none;
+        }
+
+        .steps li {
+            counter-increment: step;
+            padding: 15px 15px 15px 50px;
+            margin: 10px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 15px;
+            top: 15px;
+            background: #667eea;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e0e0e0;
+            margin: 30px 0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.show {
+            display: flex;
+        }
+
+        .toast-success {
+            border-left: 4px solid #28a745;
+        }
+
+        .env-var {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .env-var:last-child {
+            border-bottom: none;
+        }
+
+        .env-var strong {
+            color: #667eea;
+        }
+
+        .env-var span {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🚀 License Server</h1>
+        <p class="subtitle">JRebel & JetBrains 产品激活服务</p>
+
+        <!-- UUID 生成工具 -->
+        <div class="section">
+            <div class="section-title">🔑 快速激活</div>
+            <div class="input-group">
+                <input type="text" id="activationUrl" placeholder="点击生成激活地址" readonly>
+                <button class="btn btn-primary" onclick="generateUrl()">生成</button>
+                <button class="btn btn-success" onclick="copyUrl()">复制</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- JRebel 激活 -->
+        <div class="section">
+            <div class="section-title">📦 JRebel 激活</div>
+            <ol class="steps">
+                <li>点击上方"生成"按钮获取激活地址</li>
+                <li>打开 JRebel，选择 License Server 方式</li>
+                <li>粘贴激活地址，邮箱随意填写</li>
+                <li>点击 Activate 完成激活</li>
+            </ol>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Docker 部署 -->
+        <div class="section">
+            <div class="section-title">🐳 Docker 部署</div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('docker-run')">Docker Run</button>
+                <button class="tab" onclick="switchTab('docker-compose')">Docker Compose</button>
+                <button class="tab" onclick="switchTab('env-vars')">环境变量</button>
+            </div>
+
+            <!-- Docker Run -->
+            <div id="docker-run" class="tab-content active">
+                <p style="margin-bottom: 15px; color: #666;">快速启动（使用默认配置）：</p>
+                <div class="code-box">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制</button>
+                    <pre>docker run -d \
+  --name license-server \
+  -p 8081:8081 \
+  {{.DockerImage}}:latest</pre>
+                </div>
+
+                <p style="margin: 20px 0 15px; color: #666;">自定义配置：</p>
+                <div class="code-box">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制</button>
+                    <pre>docker run -d \
+  --name license-server \
+  -p 8081:8081 \
+  -e PORT=8081 \
+  -e SERVER_VERSION=3.2.4 \
+  -e DOCKER_IMAGE={{.DockerImage}} \
+  {{.DockerImage}}:latest</pre>
+                </div>
+
+                <p style="margin: 20px 0 15px; color: #666;">查看日志：</p>
+                <div class="code-box">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制</button>
+                    <pre>docker logs -f license-server</pre>
+                </div>
+            </div>
+
+            <!-- Docker Compose -->
+            <div id="docker-compose" class="tab-content">
+                <p style="margin-bottom: 15px; color: #666;">创建 <code>docker-compose.yml</code> 文件：</p>
+                <div class="code-box">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制</button>
+                    <pre>version: '3.8'
+
+services:
+  license-server:
+    image: {{.DockerImage}}:latest
+    container_name: license-server
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      # 基础配置
+      - PORT=8081
+      - HOST=0.0.0.0
+
+      # 服务器信息
+      - SERVER_VERSION=3.2.4
+      - SERVER_GUID=a1b4aea8-b031-4302-b602-670a990272cb
+      - PROTOCOL_VERSION=1.1
+      - SERVER_RANDOMNESS=H2ulzLlh7E0=
+
+      # Web 配置
+      - DOCKER_IMAGE={{.DockerImage}}
+      # - BASE_URL=https://license.example.com  # 可选：自定义域名
+
+    # 可选：挂载自定义私钥
+    # volumes:
+    #   - ./private.key:/app/private.key:ro
+    # environment:
+    #   - PRIVATE_KEY_PATH=/app/private.key
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+    networks:
+      - license-network
+
+networks:
+  license-network:
+    driver: bridge</pre>
+                </div>
+
+                <p style="margin: 20px 0 15px; color: #666;">启动服务：</p>
+                <div class="code-box">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制</button>
+                    <pre># 启动
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止
+docker-compose down</pre>
+                </div>
+            </div>
+
+            <!-- 环境变量 -->
+            <div id="env-vars" class="tab-content">
+                <p style="margin-bottom: 15px; color: #666;">可配置的环境变量：</p>
+
+                <div class="info-box">
+                    <strong>基础配置</strong>
+                    <div class="env-var">
+                        <strong>PORT</strong>
+                        <span>服务端口（默认：8081）</span>
+                    </div>
+                    <div class="env-var">
+                        <strong>HOST</strong>
+                        <span>监听地址（默认：0.0.0.0）</span>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>服务器信息</strong>
+                    <div class="env-var">
+                        <strong>SERVER_VERSION</strong>
+                        <span>服务器版本（默认：3.2.4）</span>
+                    </div>
+                    <div class="env-var">
+                        <strong>SERVER_GUID</strong>
+                        <span>服务器唯一标识</span>
+                    </div>
+                    <div class="env-var">
+                        <strong>PROTOCOL_VERSION</strong>
+                        <span>协议版本（默认：1.1）</span>
+                    </div>
+                    <div class="env-var">
+                        <strong>SERVER_RANDOMNESS</strong>
+                        <span>服务器随机数（用于签名）</span>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>Web 配置</strong>
+                    <div class="env-var">
+                        <strong>DOCKER_IMAGE</strong>
+                        <span>Docker 镜像名称</span>
+                    </div>
+                    <div class="env-var">
+                        <strong>BASE_URL</strong>
+                        <span>自定义服务器地址（可选）</span>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>高级配置</strong>
+                    <div class="env-var">
+                        <strong>PRIVATE_KEY_PATH</strong>
+                        <span>自定义私钥路径（可选）</span>
+                    </div>
+                </div>
+
+                <p style="margin: 20px 0 15px; color: #666;">使用 .env 文件：</p>
+                <div class="code-box">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制</button>
+                    <pre># 创建 .env 文件
+PORT=8081
+HOST=0.0.0.0
+SERVER_VERSION=3.2.4
+SERVER_GUID=550e8400-e29b-41d4-a716-446655440000
+PROTOCOL_VERSION=1.1
+SERVER_RANDOMNESS=H2ulzLlh7E0=
+DOCKER_IMAGE={{.DockerImage}}
+# BASE_URL=https://license.example.com</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-warning">
+            ⚠️ 本项目仅供学习研究使用，请勿用于商业用途
+        </div>
+    </div>
+
+    <footer>
+        Made with ❤️ | Version {{.ServerVersion}}
+    </footer>
+</div>
+
+<!-- Toast 通知 -->
+<div id="toast" class="toast toast-success">
+    <span>✓</span>
+    <span id="toastMessage">已复制到剪贴板</span>
+</div>
+
+<script>
+    // 生成激活 URL
+    function generateUrl() {
+        const uuid = crypto.randomUUID();
+        const serverUrl = '{{.ServerURL}}';
+        const activationUrl = serverUrl + '/' + uuid;
+        document.getElementById('activationUrl').value = activationUrl;
+        showToast('激活地址已生成');
+    }
+
+    // 复制激活 URL
+    function copyUrl() {
+        const input = document.getElementById('activationUrl');
+        if (!input.value) {
+            showToast('请先生成激活地址', 'warning');
+            return;
+        }
+        input.select();
+        document.execCommand('copy');
+        showToast('已复制到剪贴板');
+    }
+
+    // 复制文本
+    function copyText(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('已复制到剪贴板');
+    }
+
+    // 复制代码块
+    function copyCode(button) {
+        const codeBox = button.parentElement;
+        const code = codeBox.querySelector('pre').textContent;
+
+        const textarea = document.createElement('textarea');
+        textarea.value = code;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        const originalText = button.textContent;
+        button.textContent = '✓ 已复制';
+        button.style.background = '#28a745';
+
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '';
+        }, 2000);
+
+        showToast('已复制到剪贴板');
+    }
+
+    // 切换标签页
+    function switchTab(tabName) {
+        // 隐藏所有标签页内容
+        const contents = document.querySelectorAll('.tab-content');
+        contents.forEach(content => content.classList.remove('active'));
+
+        // 移除所有标签的激活状态
+        const tabs = document.querySelectorAll('.tab');
+        tabs.forEach(tab => tab.classList.remove('active'));
+
+        // 显示选中的标签页
+        document.getElementById(tabName).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // 显示通知
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        toastMessage.textContent = message;
+        toast.className = 'toast toast-' + type + ' show';
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    // 页面加载时自动生成一个激活地址
+    window.addEventListener('load', () => {
+        generateUrl();
+    });
+</script>
+</body>
+</html>

@@ -6,19 +6,20 @@ services:
     container_name: license-server
     restart: unless-stopped
     ports:
-      - "8081:8081"
+      - "${PORT:-8081}:8081"
     environment:
-      - PORT=8081
-      - HOST=0.0.0.0
-      - SERVER_VERSION=3.2.4
-      - SERVER_GUID=4794f7bd-a9df-4017-a176-44913bcbaf77
-      - PROTOCOL_VERSION=1.1
-      - SERVER_RANDOMNESS=H2ulzLlh7E0=
-    # 如果需要使用自定义私钥，取消下面的注释
-    # volumes:
-    #   - ./private.key:/app/private.key:ro
-    # environment:
-    #   - PRIVATE_KEY_PATH=/app/private.key
+      # 服务器配置
+      - PORT=${PORT:-8081}
+      - HOST=${HOST:-0.0.0.0}
+      - SERVER_VERSION=${SERVER_VERSION:-3.2.4}
+      - SERVER_GUID=${SERVER_GUID:-a1b4aea8-b031-4302-b602-670a990272cb}
+      - PROTOCOL_VERSION=${PROTOCOL_VERSION:-1.1}
+      - SERVER_RANDOMNESS=${SERVER_RANDOMNESS:-H2ulzLlh7E0=}
+
+      # Web 配置
+      - DOCKER_IMAGE=${DOCKER_IMAGE:-ruking001/jrebel-license-server}
+      - BASE_URL=${BASE_URL:-http://home.997269.xyz:38881}  # 留空则自动检测
+
     networks:
       - license-network
 

@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Server  ServerConfig
 	License LicenseConfig
+	Web     WebConfig
 }
 
 type ServerConfig struct {
@@ -28,6 +29,11 @@ type LicenseConfig struct {
 	ProlongationPeriod string
 }
 
+type WebConfig struct {
+	DockerImage string
+	BaseURL     string
+}
+
 // LoadConfig 加载配置
 func LoadConfig() (*Config, error) {
 	config := &Config{
@@ -43,6 +49,10 @@ func LoadConfig() (*Config, error) {
 			ServerRandomness:   getEnv("SERVER_RANDOMNESS", "H2ulzLlh7E0="),
 			OfflineDays:        180,
 			ProlongationPeriod: "607875500",
+		},
+		Web: WebConfig{
+			DockerImage: getEnv("DOCKER_IMAGE", "ruk1ng001/jrebel-license-server"),
+			BaseURL:     getEnv("BASE_URL", ""), // 留空则自动检测
 		},
 	}
 
@@ -97,7 +107,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// 默认私钥（与原Java代码相同，仅用于演示）
+// 默认私钥
 const defaultPrivateKey = `-----BEGIN PRIVATE KEY-----
 MIICXAIBAAKBgQDQ93CP6SjEneDizCF1P/MaBGf582voNNFcu8oMhgdTZ/N6qa6O
 7XJDr1FSCyaDdKSsPCdxPK7Y4Usq/fOPas2kCgYcRS/iebrtPEFZ/7TLfk39HLuT

@@ -1,6 +1,24 @@
 name: Build and Push Docker Image
 
 on:
+  # 推送到主分支时自动触发
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+  # Pull Request 时仅构建不推送
+  pull_request:
+    branches:
+      - main
+      - master
+
+  # 保留手动触发功能
   workflow_dispatch:
     inputs:
       version:
@@ -26,6 +44,7 @@ on:
 
 env:
   IMAGE_NAME: jrebel-license-server
+  DEFAULT_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build-and-push:
@@ -45,14 +64,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false')
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false')
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -63,11 +82,17 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手动触发：使用输入的版本
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.ref_type }}" = "tag" ]; then
+            # 标签推送：使用标签名
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
+          elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "master" ]; then
+            # 主分支推送：使用 latest
             echo "version=latest" >> $GITHUB_OUTPUT
+          else
+            # 其他分支：使用分支名
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Determine platforms
@@ -76,7 +101,18 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "platforms=${{ github.event.inputs.platforms }}" >> $GITHUB_OUTPUT
           else
-            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+            echo "platforms=${{ env.DEFAULT_PLATFORMS }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine if should push
+        id: should_push
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "push=false" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "push=${{ github.event.inputs.push_to_registry }}" >> $GITHUB_OUTPUT
+          else
+            echo "push=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Extract Docker metadata
@@ -88,12 +124,12 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.version.outputs.version }}
-            type=raw,value=latest,enable=${{ steps.version.outputs.version == 'latest' || github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.version == 'latest' || github.ref_name == 'main' || github.ref_name == 'master' }}
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=sha,prefix=sha-,format=short
 
       - name: Build and push Docker image
         id: build
@@ -102,40 +138,67 @@ jobs:
           context: .
           file: ./Dockerfile.multiarch
           platforms: ${{ steps.platforms.outputs.platforms }}
-          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false') }}
+          push: ${{ steps.should_push.outputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
 
-      - name: Image digest
+      - name: Generate build summary
         run: |
-          echo "### Build Summary :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Platforms:** ${{ steps.platforms.outputs.platforms }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Digest:** ${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch/Tag** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Platforms** | ${{ steps.platforms.outputs.platforms }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Pushed** | ${{ steps.should_push.outputs.push }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Digest** | ${{ steps.build.outputs.digest }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Docker Pull Commands" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.should_push.outputs.push }}" = "true" ]; then
+            echo "### 📦 Docker Pull Commands" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Docker Hub" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Quick Start" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "docker run -d -p 8081:8081 --name license-server \\" >> $GITHUB_STEP_SUMMARY
+            echo "  ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ℹ️ Build Only" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Image was built but not pushed to registry." >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Inspect image
-        if: github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false')
+        if: steps.should_push.outputs.push == 'true'
         run: |
-          echo "### Docker Hub Image" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Image Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Docker Hub" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          docker buildx imagetools inspect ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} >> $GITHUB_STEP_SUMMARY || true
+          docker buildx imagetools inspect ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} >> $GITHUB_STEP_SUMMARY 2>&1 || echo "Failed to inspect Docker Hub image" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### GitHub Container Registry Image" >> $GITHUB_STEP_SUMMARY
+          echo "#### GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} >> $GITHUB_STEP_SUMMARY || true
+          docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} >> $GITHUB_STEP_SUMMARY 2>&1 || echo "Failed to inspect GHCR image" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Create Release
@@ -157,10 +220,24 @@ jobs:
             ```
             
             ### Supported Platforms
-            ${{ steps.platforms.outputs.platforms }}
+            - ${{ steps.platforms.outputs.platforms }}
             
             ### Quick Start
             ```bash
             docker run -d -p 8081:8081 --name license-server \
               ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ```
+            
+            ### What's Changed
+            See the full changelog below.
+
+      - name: Send notification on failure
+        if: failure()
+        run: |
+          echo "### ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The build process encountered an error." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch/Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

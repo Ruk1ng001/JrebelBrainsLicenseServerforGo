@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 
@@ -12,77 +14,101 @@ import (
 	"github.com/google/uuid"
 )
 
+//go:embed templates/*
+var templatesFS embed.FS
+
 type Handler struct {
-	config *config.Config
-	signer *crypto.Signer
-	logger *log.Logger
+	config   *config.Config
+	signer   *crypto.Signer
+	logger   *log.Logger
+	template *template.Template
 }
 
 // NewHandler 创建处理器
 func NewHandler(cfg *config.Config, signer *crypto.Signer, logger *log.Logger) *Handler {
-	return &Handler{
-		config: cfg,
-		signer: signer,
-		logger: logger,
+	// 解析模板
+	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
+	if err != nil {
+		logger.Printf("Warning: Failed to parse templates: %v", err)
 	}
+
+	return &Handler{
+		config:   cfg,
+		signer:   signer,
+		logger:   logger,
+		template: tmpl,
+	}
+}
+
+// IndexData 首页数据
+type IndexData struct {
+	ServerURL       string
+	ServerVersion   string
+	ProtocolVersion string
+	DockerImage     string
 }
 
 // IndexHandler 处理首页请求
 func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
+	// 构建服务器 URL
+	serverURL := h.getServerURL(r)
+
+	// 准备模板数据
+	data := IndexData{
+		ServerURL:       serverURL,
+		ServerVersion:   h.config.Server.ServerVersion,
+		ProtocolVersion: h.config.Server.ProtocolVersion,
+		DockerImage:     h.config.Web.DockerImage,
+	}
+
+	// 渲染模板
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.template.ExecuteTemplate(w, "index.html", data); err != nil {
+		h.logger.Printf("Failed to render template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getServerURL 获取服务器 URL
+func (h *Handler) getServerURL(r *http.Request) string {
+	// 如果配置了 BASE_URL，直接使用
+	if h.config.Web.BaseURL != "" {
+		return h.config.Web.BaseURL
+	}
+
+	// 否则自动检测
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
 
-	licenseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
-	exampleGUID := uuid.New().String()
+	// 检查 X-Forwarded-Proto 头（用于反向代理）
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
 
-	html := fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>JRebel & JetBrains License Server</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-        h1 { color: #333; }
-        h3 { color: #666; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
-        .url { color: #d14; font-weight: bold; }
-        hr { margin: 30px 0; }
-        .section { margin: 20px 0; }
-    </style>
-</head>
-<body>
-    <h3>使用说明（Instructions for use）</h3>
-    <hr/>
-    
-    <div class="section">
-        <h1>Hello, This is a JRebel & JetBrains License Server!</h1>
-        <p>License Server started at <span class="url">%s</span></p>
-        <p>JetBrains Activation address: <span class="url">%s/</span></p>
-        <p>JRebel 7.1 and earlier version Activation address: <span class="url">%s/{tokenname}</span>, with any email.</p>
-        <p>JRebel 2018.1 and later version Activation address: <span class="url">%s/{guid}</span></p>
-        <p>Example: <span class="url">%s/%s</span>, with any email.</p>
-    </div>
-    
-    <hr/>
-    
-    <div class="section">
-        <h1>你好，此地址是 JRebel & JetBrains License Server!</h1>
-        <p>许可服务器启动于 <span class="url">%s</span></p>
-        <p>JetBrains激活地址: <span class="url">%s/</span></p>
-        <p>JRebel 7.1 及旧版本激活地址: <span class="url">%s/{tokenname}</span>, 以及任意邮箱地址。</p>
-        <p>JRebel 2018.1+ 版本激活地址: <span class="url">%s/{guid}</span></p>
-        <p>例如: <span class="url">%s/%s</span>, 以及任意邮箱地址。</p>
-    </div>
-</body>
-</html>
-	`, licenseURL, licenseURL, licenseURL, licenseURL, licenseURL, exampleGUID,
-		licenseURL, licenseURL, licenseURL, licenseURL, licenseURL, exampleGUID)
+	// 检查 X-Forwarded-Host 头（用于反向代理）
+	host := r.Host
+	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		host = forwardedHost
+	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+// GenerateUUIDHandler 生成 UUID API
+func (h *Handler) GenerateUUIDHandler(w http.ResponseWriter, r *http.Request) {
+	newUUID := uuid.New().String()
+	serverURL := h.getServerURL(r)
+
+	response := map[string]string{
+		"uuid":          newUUID,
+		"activationUrl": fmt.Sprintf("%s/%s", serverURL, newUUID),
+		"serverUrl":     serverURL,
+	}
+
+	h.respondJSON(w, http.StatusOK, response)
 }
 
 // respondJSON 返回JSON响应
