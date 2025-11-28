@@ -12,12 +12,6 @@ on:
       - '.gitignore'
       - 'LICENSE'
 
-  # Pull Request 时仅构建不推送
-  pull_request:
-    branches:
-      - main
-      - master
-
   # 保留手动触发功能
   workflow_dispatch:
     inputs:
@@ -29,13 +23,16 @@ on:
       platforms:
         description: 'Target platforms'
         required: false
-        default: 'linux/amd64,linux/arm64'
+        default: 'all'
         type: choice
         options:
+          - 'all'
           - 'linux/amd64,linux/arm64'
+          - 'linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6'
           - 'linux/amd64'
           - 'linux/arm64'
-          - 'linux/amd64,linux/arm64,linux/arm/v7'
+          - 'linux/arm/v7'
+          - 'linux/arm/v6'
       push_to_registry:
         description: 'Push to Docker registry'
         required: false
@@ -44,7 +41,7 @@ on:
 
 env:
   IMAGE_NAME: jrebel-license-server
-  DEFAULT_PLATFORMS: linux/amd64,linux/arm64
+  DEFAULT_PLATFORMS: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
 
 jobs:
   build-and-push:
@@ -59,6 +56,8 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -82,16 +81,12 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 手动触发：使用输入的版本
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.ref_type }}" = "tag" ]; then
-            # 标签推送：使用标签名
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "master" ]; then
-            # 主分支推送：使用 latest
             echo "version=latest" >> $GITHUB_OUTPUT
           else
-            # 其他分支：使用分支名
             echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
@@ -99,7 +94,11 @@ jobs:
         id: platforms
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "platforms=${{ github.event.inputs.platforms }}" >> $GITHUB_OUTPUT
+            if [ "${{ github.event.inputs.platforms }}" = "all" ]; then
+              echo "platforms=${{ env.DEFAULT_PLATFORMS }}" >> $GITHUB_OUTPUT
+            else
+              echo "platforms=${{ github.event.inputs.platforms }}" >> $GITHUB_OUTPUT
+            fi
           else
             echo "platforms=${{ env.DEFAULT_PLATFORMS }}" >> $GITHUB_OUTPUT
           fi
@@ -161,6 +160,15 @@ jobs:
           echo "| **Digest** | ${{ steps.build.outputs.digest }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
+          # 显示支持的架构列表
+          echo "### 🏗️ Supported Architectures" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          IFS=',' read -ra PLATFORMS <<< "${{ steps.platforms.outputs.platforms }}"
+          for platform in "${PLATFORMS[@]}"; do
+            echo "- ✅ \`$platform\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
           if [ "${{ steps.should_push.outputs.push }}" = "true" ]; then
             echo "### 📦 Docker Pull Commands" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -179,6 +187,8 @@ jobs:
             echo "docker run -d -p 8081:8081 --name license-server \\" >> $GITHUB_STEP_SUMMARY
             echo "  ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> 💡 Docker will automatically pull the correct image for your architecture" >> $GITHUB_STEP_SUMMARY
           else
             echo "### ℹ️ Build Only" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -189,7 +199,7 @@ jobs:
         if: steps.should_push.outputs.push == 'true'
         run: |
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔍 Image Details" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Multi-Architecture Manifest" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### Docker Hub" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -219,16 +229,32 @@ jobs:
             docker pull ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ```
             
-            ### Supported Platforms
-            - ${{ steps.platforms.outputs.platforms }}
+            ### 🏗️ Supported Architectures
             
-            ### Quick Start
+            This release supports the following platforms:
+            
+            | Architecture | Platform String | Common Devices |
+            |--------------|-----------------|----------------|
+            | **AMD64** | `linux/amd64` | Desktop PCs, Servers, Cloud VMs |
+            | **ARM64** | `linux/arm64` | Raspberry Pi 4/5, Apple Silicon, AWS Graviton |
+            | **ARMv7** | `linux/arm/v7` | Raspberry Pi 2/3, Many ARM boards |
+            | **ARMv6** | `linux/arm/v6` | Raspberry Pi 1/Zero, Older ARM devices |
+            
+            Docker will automatically select the correct image for your platform.
+            
+            ### 🚀 Quick Start
+            
             ```bash
+            # Run on any supported platform
             docker run -d -p 8081:8081 --name license-server \
               ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            
+            # Access the web interface
+            open http://localhost:8081
             ```
             
-            ### What's Changed
+            ### 📝 What's Changed
+            
             See the full changelog below.
 
       - name: Send notification on failure
@@ -241,3 +267,4 @@ jobs:
           echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch/Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** ${{ steps.platforms.outputs.platforms }}" >> $GITHUB_STEP_SUMMARY
